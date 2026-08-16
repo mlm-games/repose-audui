@@ -1,0 +1,56 @@
+[package]
+name = "repose-audui"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.93"
+license = "MPL-2.0 OR LGPL-2.1-or-later"
+description = "Embed Repose UI in DAW audio plugins (baseview / nih-plug). UI thread only - no audio DSP."
+repository = "https://github.com/mlm-games/repose-audui"
+readme = "README.md"
+keywords = ["repose", "audio", "plugin", "clap", "vst", "vst3", "nih-plug", "baseview"]
+categories = ["gui", "multimedia::audio"]
+
+[features]
+default = []
+baseview = [
+    "dep:baseview",
+    "dep:keyboard-types",
+    "dep:raw-window-handle-05",
+    "dep:clipawl",
+]
+nih-plug = ["baseview", "dep:nih_plug", "dep:crossbeam"]
+keyboard-focus-workaround = []
+
+[dependencies]
+repose-app = "0.27"
+repose-core = "0.27"
+repose-ui = "0.27"
+repose-text = "0.27"
+repose-render-wgpu = { version = "0.27", default-features = false }
+
+wgpu = "30"
+raw-window-handle = "0.6"
+pollster = "0.4"
+log = "0.4"
+anyhow = "1"
+web-time = "1"
+
+baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "579130ecb4f9f315ae52190af42f0ea46aeaa4a2", features = ["opengl"], optional = true }
+keyboard-types = { version = "0.6.1", default-features = false, optional = true }
+raw-window-handle-05 = { package = "raw-window-handle", version = "0.5", optional = true }
+clipawl = { version = "0.4", default-features = false, features = ["async-io", "linux-x11", "linux-wayland"], optional = true }
+
+nih_plug = { git = "https://github.com/robbert-vdh/nih-plug", branch = "master", optional = true }
+crossbeam = { version = "0.8", optional = true }
+
+[dev-dependencies]
+env_logger = "0.11"
+repose-material = "0.27"
+
+[[example]]
+name = "gain_gui"
+required-features = ["baseview"]
+
+[[example]]
+name = "blocking_counter"
+required-features = ["baseview"]
