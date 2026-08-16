@@ -63,6 +63,12 @@ fn convert_window_05_to_06(
             out.visual_id = NonZeroU32::new(w.visual_id);
             RawWindowHandle::Xcb(out)
         }
+        raw_window_handle_05::RawWindowHandle::Wayland(w) => {
+            RawWindowHandle::Wayland(raw_window_handle::WaylandWindowHandle::new(
+                NonNull::new(w.surface)
+                    .ok_or_else(|| anyhow::anyhow!("null wayland surface"))?,
+            ))
+        }
         other => anyhow::bail!("unsupported rwh 0.5 window handle on this build: {other:?}"),
     })
 }
@@ -90,6 +96,12 @@ fn convert_display_05_to_06(
             RawDisplayHandle::Xcb(raw_window_handle::XcbDisplayHandle::new(
                 NonNull::new(d.connection),
                 d.screen,
+            ))
+        }
+        raw_window_handle_05::RawDisplayHandle::Wayland(d) => {
+            RawDisplayHandle::Wayland(raw_window_handle::WaylandDisplayHandle::new(
+                NonNull::new(d.display)
+                    .ok_or_else(|| anyhow::anyhow!("null wayland display"))?,
             ))
         }
         other => anyhow::bail!("unsupported rwh 0.5 display handle on this build: {other:?}"),

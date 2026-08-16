@@ -31,21 +31,30 @@ impl GpuSurface {
     /// Compose + render + present one frame.
     ///
     /// Handles lost/outdated/timeout surface conditions without panicking so a
-    /// DAW can minimize / GPU can reset under a plugin window.
+    /// DAW can minimize / GPU can reset under a plugin window. Lost/outdated
+    /// surfaces are reconfigured and retried a few times within the same frame.
     pub fn present(&mut self, embed: &mut ReposeEmbed) -> Result<()> {
         embed.compose();
 
-        let frame = match self.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(f) => f,
-            wgpu::CurrentSurfaceTexture::Suboptimal(f) => f,
-            wgpu::CurrentSurfaceTexture::Lost
-            | wgpu::CurrentSurfaceTexture::Outdated
-            | wgpu::CurrentSurfaceTexture::Validation => {
-                self.surface.configure(&self.device, &self.config);
-                return Ok(());
-            }
-            wgpu::CurrentSurfaceTexture::Timeout | wgpu::CurrentSurfaceTexture::Occluded => {
-                return Ok(());
+        let mut retries = 0u32;
+        const MAX_RETRIES: u32 = 4;
+        let frame = loop {
+            match self.surface.get_current_texture() {
+                wgpu::CurrentSurfaceTexture::Success(f)
+                | wgpu::CurrentSurfaceTexture::Suboptimal(f) => break f,
+                wgpu::CurrentSurfaceTexture::Lost
+                | wgpu::CurrentSurfaceTexture::Outdated
+                | wgpu::CurrentSurfaceTexture::Validation => {
+                    retries += 1;
+                    if retries >= MAX_RETRIES {
+                        log::warn!("surface recovery failed after {MAX_RETRIES}; skip frame");
+                        return Ok(());
+                    }
+                    self.surface.configure(&self.device, &self.config);
+                }
+                wgpu::CurrentSurfaceTexture::Timeout | wgpu::CurrentSurfaceTexture::Occluded => {
+                    return Ok(());
+                }
             }
         };
         let view = frame
@@ -67,14 +76,21 @@ impl GpuSurface {
 
 /// Pick the largest supported MSAA sample count <= `requested` for a format.
 pub fn pick_msaa(adapter: &wgpu::Adapter, requested: u32, format: wgpu::TextureFormat) -> u32 {
+    let requested = requested.max(1);
+    if requested == 1 {
+        return 1;
+    }
     let flags = adapter.get_texture_format_features(format).flags;
-    for samples in [8u32, 4, 2, 1] {
+    for samples in [8u32, 4, 2] {
+        if samples > requested {
+            continue;
+        }
         let flag = match samples {
             8 => wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X8,
             4 => wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X4,
             _ => wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X2,
         };
-        if samples <= requested && flags.contains(flag) {
+        if flags.contains(flag) {
             return samples;
         }
     }
@@ -126,13 +142,27 @@ pub fn attach_from_handles(
         .find(|f| f.is_srgb())
         .unwrap_or(caps.formats[0]);
     let msaa = pick_msaa(&adapter, msaa.max(1), format);
+    // Prefer Fifo (vsync; safe default for plugin windows), fall back to
+    // Mailbox then Immediate when the host compositor lacks it.
+    let present_mode = caps
+        .present_modes
+        .iter()
+        .copied()
+        .find(|m| *m == wgpu::PresentMode::Fifo)
+        .or_else(|| {
+            caps.present_modes
+                .iter()
+                .copied()
+                .find(|m| *m == wgpu::PresentMode::Mailbox)
+        })
+        .unwrap_or(wgpu::PresentMode::Immediate);
 
     let config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         format,
         width: width.max(1),
         height: height.max(1),
-        present_mode: wgpu::PresentMode::Fifo,
+        present_mode,
         alpha_mode: caps.alpha_modes[0],
         color_space: wgpu::SurfaceColorSpace::Auto,
         view_formats: vec![],

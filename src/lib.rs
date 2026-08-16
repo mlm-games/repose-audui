@@ -22,8 +22,9 @@ pub use embed::ReposeEmbed;
 
 pub mod prelude {
     pub use crate::embed::ReposeEmbed;
+    pub use crate::input::KeyCapture;
     pub use crate::input::{logical_to_physical, map_pointer_button_index};
-    pub use crate::param_widgets::{panel, section_title};
+    pub use crate::param_widgets::{panel, param_row, section_title, toggle_row};
     pub use crate::rwh_compat::RawHandles;
     pub use repose_app::{FrameOutput, PlatformOutput, ReposeRuntime};
     pub use repose_core::input::{ImeEvent, Key, KeyEvent, KeyEventType, Modifiers, PointerButton};

@@ -137,6 +137,16 @@ pub mod baseview_map {
         embed.set_modifiers(mods);
 
         let key = map_key(&ke.key);
+
+        let ui_wants_keys = embed
+            .last_frame()
+            .map(|f| f.wants_keyboard)
+            .unwrap_or(false);
+        if fall_through_unhandled && !ui_wants_keys {
+            // Modifiers were already updated so the next click sees them.
+            return EventStatus::Ignored;
+        }
+
         if !key_capture.allows(&key) {
             return EventStatus::Ignored;
         }
@@ -177,9 +187,7 @@ pub mod baseview_map {
         embed.set_modifiers(mods);
         let consumed = embed.key_with_text(&ev, composed);
 
-        // Give the DAW parent a chance at keys the UI did not consume (space
-        // for transport, number keys, …) when asked for.
-        if consumed || !fall_through_unhandled {
+        if consumed || !fall_through_unhandled || ui_wants_keys {
             EventStatus::Captured
         } else {
             EventStatus::Ignored
@@ -206,6 +214,7 @@ pub mod baseview_map {
                 } => {
                     *last_cursor_logical = (position.x, position.y);
                     embed.set_modifiers(map_modifiers(modifiers));
+                    embed.set_pointer_inside(true);
                     let pos = super::logical_to_physical(position.x, position.y, embed.scale);
                     embed.pointer_move(pos);
                     EventStatus::Captured
@@ -228,15 +237,13 @@ pub mod baseview_map {
                 }
                 MouseEvent::WheelScrolled { delta, modifiers } => {
                     embed.set_modifiers(map_modifiers(modifiers));
-                    #[allow(unused_mut)]
-                    let (mut dx, dy) = match delta {
-                        ScrollDelta::Lines { x, y } => (x * 32.0, -y * 32.0),
-                        ScrollDelta::Pixels { x, y } => (x, -y),
+                    let (dx, dy) = match delta {
+                        ScrollDelta::Lines { x, y } => {
+                            let unit = repose_core::locals::dp_to_px(60.0);
+                            (-x * unit, -y * unit)
+                        }
+                        ScrollDelta::Pixels { x, y } => (-x, -y),
                     };
-                    #[cfg(target_os = "macos")]
-                    {
-                        dx = -dx;
-                    }
                     embed.scroll(Vec2 { x: dx, y: dy });
                     EventStatus::Captured
                 }
@@ -255,6 +262,7 @@ pub mod baseview_map {
                 dispatch_keyboard(embed, ke, key_capture, fall_through_unhandled)
             }
             Event::Window(WindowEvent::Unfocused) => {
+                embed.set_modifiers(Modifiers::default());
                 embed.focus_lost();
                 EventStatus::Captured
             }

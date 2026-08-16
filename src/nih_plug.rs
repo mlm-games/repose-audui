@@ -16,6 +16,8 @@ pub struct ReposeEditorState {
     pub height: AtomicCell<u32>,
     pub open: AtomicBool,
     pub scaling_factor: AtomicCell<Option<f32>>,
+    /// UI-thread-only request; consumed in on_frame.
+    pub requested_size: AtomicCell<Option<(u32, u32)>>,
 }
 
 impl ReposeEditorState {
@@ -25,7 +27,14 @@ impl ReposeEditorState {
             height: AtomicCell::new(height),
             open: AtomicBool::new(false),
             scaling_factor: AtomicCell::new(None),
+            requested_size: AtomicCell::new(None),
         })
+    }
+
+    /// Ask the host to resize the editor to `width` x `height` logical pixels.
+    pub fn request_resize(&self, width: u32, height: u32) {
+        self.requested_size
+            .store(Some((width.max(1), height.max(1))));
     }
 
     pub fn size(&self) -> (u32, u32) {
@@ -68,6 +77,8 @@ impl Editor for ReposeEditor {
         let root = self.root.clone();
         let on_frame = self.on_frame.clone();
         let ctx_frame = context.clone();
+        let ctx_resize = context.clone();
+        let state_frame = self.state.clone();
 
         let config = ReposeBaseviewConfig {
             title: self.title.clone(),
@@ -78,6 +89,7 @@ impl Editor for ReposeEditor {
             msaa: 4,
             clear_color: [0.10, 0.10, 0.12, 1.0],
             key_fallthrough: true,
+            key_capture: crate::input::KeyCapture::CaptureAll,
         };
 
         let window = open_parented(
@@ -88,9 +100,17 @@ impl Editor for ReposeEditor {
                 let context = context.clone();
                 move |sched, rctx| (root)(sched, rctx, &context)
             },
-            Some(Box::new(move |embed, _window| {
+            Some(Box::new(move |embed, window| {
                 if let Some(cb) = &on_frame {
                     cb(embed, &ctx_frame);
+                }
+
+                if let Some((nw, nh)) = state_frame.requested_size.swap(None)
+                    && ctx_resize.request_resize()
+                {
+                    window.resize(baseview::Size::new(nw as f64, nh as f64));
+                    state_frame.width.store(nw);
+                    state_frame.height.store(nh);
                 }
             })),
         );
@@ -104,7 +124,11 @@ impl Editor for ReposeEditor {
     }
 
     fn size(&self) -> (u32, u32) {
-        self.state.size()
+        if let Some(s) = self.state.requested_size.load() {
+            s
+        } else {
+            self.state.size()
+        }
     }
 
     fn set_scale_factor(&self, factor: f32) -> bool {

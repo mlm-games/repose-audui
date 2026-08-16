@@ -12,6 +12,7 @@ use baseview::{
     WindowScalePolicy,
 };
 use raw_window_handle_05::HasRawWindowHandle;
+use repose_core::cursor::CursorIcon;
 use repose_core::{RenderContext, Scheduler, View};
 
 pub struct ReposeBaseviewConfig {
@@ -24,6 +25,9 @@ pub struct ReposeBaseviewConfig {
     /// Whether keys the UI does not consume are let through to the DAW parent.
     /// Safe default: `true` so DAW transport keeps working while focused.
     pub key_fallthrough: bool,
+    /// Optional keyboard filter (space → DAW, etc.). Only consulted while the
+    /// UI wants the keyboard (focused textfield / IME) when `key_fallthrough`.
+    pub key_capture: KeyCapture,
 }
 
 impl Default for ReposeBaseviewConfig {
@@ -35,6 +39,7 @@ impl Default for ReposeBaseviewConfig {
             msaa: 4,
             clear_color: [0.12, 0.12, 0.14, 1.0],
             key_fallthrough: true,
+            key_capture: KeyCapture::CaptureAll,
         }
     }
 }
@@ -45,11 +50,18 @@ pub struct ReposeWindowHandler {
     gpu: Option<GpuSurface>,
     logical: (f64, f64),
     scale: f32,
+    /// When true, Resized events update scale from the system.
+    use_system_scaling: bool,
     cursor_logical: (f64, f64),
     msaa: u32,
     last_cursor: Option<MouseCursor>,
     key_capture: KeyCapture,
     key_fallthrough: bool,
+    /// Force one dummy resize after first frame (vizia pattern) so
+    /// `SystemScaleFactor` is corrected on HiDPI before the user interacts.
+    needs_scale_kick: bool,
+    /// Optional logical size the UI wants (host/on_frame can set). Applied next frame.
+    pending_logical_resize: Option<(f64, f64)>,
     /// Optional per-frame hook (pull meters, params, resize requests, …).
     pub on_frame:
         Option<Box<dyn for<'a> FnMut(&mut ReposeEmbed, &mut Window<'a>) + Send + 'static>>,
@@ -69,9 +81,11 @@ impl ReposeWindowHandler {
     {
         install_clipboard_hooks();
 
-        let scale = match config.scale {
-            WindowScalePolicy::ScaleFactor(s) => s as f32,
-            WindowScalePolicy::SystemScaleFactor => 1.0,
+        let (use_system_scaling, scale) = match config.scale {
+            WindowScalePolicy::ScaleFactor(s) => (false, s as f32),
+            // Start at 1.0; first Resized (or the scale kick) fixes it on HiDPI
+            // before the user interacts.
+            WindowScalePolicy::SystemScaleFactor => (true, 1.0),
         };
         let phy_w = (config.logical_size.0 * scale as f64).round().max(1.0) as u32;
         let phy_h = (config.logical_size.1 * scale as f64).round().max(1.0) as u32;
@@ -90,22 +104,36 @@ impl ReposeWindowHandler {
             gpu,
             logical: config.logical_size,
             scale,
+            use_system_scaling,
             cursor_logical: (0.0, 0.0),
             msaa: config.msaa,
             last_cursor: None,
-            key_capture: KeyCapture::CaptureAll,
+            key_capture: config.key_capture.clone(),
             key_fallthrough: config.key_fallthrough,
+            needs_scale_kick: use_system_scaling,
+            pending_logical_resize: None,
             on_frame,
         }
     }
 
+    /// Request a logical resize (plugin UI or host). Applied in `on_frame`.
+    pub fn request_logical_resize(&mut self, w: f64, h: f64) {
+        self.pending_logical_resize = Some((w.max(1.0), h.max(1.0)));
+    }
+
+    pub fn set_key_capture(&mut self, c: KeyCapture) {
+        self.key_capture = c;
+    }
+
     fn apply_resize(&mut self, window: &mut Window, info: baseview::WindowInfo) {
-        let s = info.scale() as f32;
+        if self.use_system_scaling {
+            self.scale = info.scale() as f32;
+        }
         let phy = info.physical_size();
+        // Prefer physical from baseview; logical tracked for host size APIs.
         self.logical = (info.logical_size().width, info.logical_size().height);
-        self.scale = s;
         self.embed
-            .set_size_px(phy.width.max(1), phy.height.max(1), s);
+            .set_size_px(phy.width.max(1), phy.height.max(1), self.scale);
         if let Some(gpu) = &mut self.gpu {
             gpu.resize(phy.width.max(1), phy.height.max(1));
         } else {
@@ -124,7 +152,7 @@ impl ReposeWindowHandler {
     }
 
     fn apply_cursor(&mut self, window: &mut Window) {
-        //HACK: baseview's cursor support on macOS is unreliable. Remove when stable.
+        // HACK: baseview's cursor support on macOS is unreliable. Remove when stable.
         if cfg!(target_os = "macos") {
             return;
         }
@@ -132,7 +160,7 @@ impl ReposeWindowHandler {
             .embed
             .platform()
             .and_then(|p| p.cursor)
-            .or_else(|| self.embed.runtime.cursor_suggestion());
+            .or(Some(CursorIcon::Default));
         let next = icon.map(map_cursor);
         if next != self.last_cursor {
             if let Some(c) = next {
@@ -145,6 +173,18 @@ impl ReposeWindowHandler {
 
 impl WindowHandler for ReposeWindowHandler {
     fn on_frame(&mut self, window: &mut Window) {
+        if self.needs_scale_kick {
+            self.needs_scale_kick = false;
+            let (w, h) = self.logical;
+            window.resize(Size::new(w + 1.0, h + 1.0));
+            window.resize(Size::new(w, h));
+        }
+
+        if let Some((w, h)) = self.pending_logical_resize.take() {
+            self.logical = (w, h);
+            window.resize(Size::new(w, h));
+        }
+
         if let Some(cb) = self.on_frame.as_mut() {
             cb(&mut self.embed, window);
         }
@@ -167,26 +207,22 @@ impl WindowHandler for ReposeWindowHandler {
                 EventStatus::Captured
             }
             Event::Window(baseview::WindowEvent::Unfocused) => {
+                self.embed.set_modifiers(Default::default());
                 self.embed.focus_lost();
                 EventStatus::Captured
             }
-            Event::Window(baseview::WindowEvent::Focused | baseview::WindowEvent::WillClose) => {
+            Event::Window(baseview::WindowEvent::WillClose) => {
+                self.embed.focus_lost();
                 EventStatus::Ignored
             }
-            Event::Mouse(_) | Event::Keyboard(_) => {
-                let status = baseview_map::dispatch(
-                    &mut self.embed,
-                    event,
-                    &mut self.cursor_logical,
-                    &self.key_capture,
-                    self.key_fallthrough,
-                );
-                // Let unhandled keys fall through to the host when enabled.
-                if self.key_fallthrough && status == EventStatus::Captured {
-                    // Consuming the key is enough for the DAW not to see it.
-                }
-                status
-            }
+            Event::Window(baseview::WindowEvent::Focused) => EventStatus::Ignored,
+            Event::Mouse(_) | Event::Keyboard(_) => baseview_map::dispatch(
+                &mut self.embed,
+                event,
+                &mut self.cursor_logical,
+                &self.key_capture,
+                self.key_fallthrough,
+            ),
         }
     }
 }

@@ -64,10 +64,10 @@ impl ReposeEmbed {
             format,
             self.msaa_samples,
         ));
-        if self.size_px.0 > 1 || self.size_px.1 > 1 {
-            if let Some(r) = &mut self.renderer {
-                r.resize(self.size_px.0, self.size_px.1);
-            }
+        if (self.size_px.0 > 1 || self.size_px.1 > 1)
+            && let Some(r) = &mut self.renderer
+        {
+            r.resize(self.size_px.0, self.size_px.1);
         }
     }
 
@@ -81,8 +81,16 @@ impl ReposeEmbed {
 
     /// Physical size + DPI. Repose layout and input run in device pixels.
     pub fn set_size_px(&mut self, w: u32, h: u32, scale: f32) {
-        self.size_px = (w.max(1), h.max(1));
-        self.scale = scale.max(1e-6);
+        let w = w.max(1);
+        let h = h.max(1);
+        let scale = scale.max(1e-6);
+        // Skip no-ops to avoid thrashing MSAA targets / relayout every frame
+        // (present() and host Resized events can repeat the same size).
+        if self.size_px == (w, h) && (self.scale - scale).abs() < f32::EPSILON {
+            return;
+        }
+        self.size_px = (w, h);
+        self.scale = scale;
         self.runtime
             .set_viewport_and_scale(self.size_px.0, self.size_px.1, self.scale);
         if let Some(r) = &mut self.renderer {
@@ -195,5 +203,14 @@ impl ReposeEmbed {
 
     pub fn last_frame(&self) -> Option<&FrameOutput> {
         self.last.as_ref()
+    }
+
+    /// Whether the last composed frame wanted keyboard input (focused text
+    /// field or active IME composition).
+    pub fn wants_keyboard(&self) -> bool {
+        self.last
+            .as_ref()
+            .map(|f| f.wants_keyboard)
+            .unwrap_or(false)
     }
 }

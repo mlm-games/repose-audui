@@ -4,7 +4,7 @@ use repose_core::prelude::*;
 use repose_material::material3::{Slider, SliderConfig};
 use repose_audui::baseview_host::{open_blocking, ReposeBaseviewConfig};
 use repose_audui::param_widgets::{panel, section_title};
-use repose_ui::{Column, Text, TextStyle, ViewExt};
+use repose_ui::{Text, TextStyle};
 
 fn main() {
     let _ = env_logger::try_init();
