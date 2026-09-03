@@ -22,11 +22,11 @@ nih-plug = ["baseview", "dep:nih_plug", "dep:crossbeam"]
 keyboard-focus-workaround = []
 
 [dependencies]
-repose-app = "0.27"
-repose-core = "0.27"
-repose-ui = "0.27"
-repose-text = "0.27"
-repose-render-wgpu = { version = "0.27", default-features = false }
+repose-app = "0.28"
+repose-core = "0.28"
+repose-ui = "0.28"
+repose-text = "0.28"
+repose-render-wgpu = { version = "0.28", default-features = false }
 
 wgpu = "30"
 raw-window-handle = "0.6"
@@ -54,3 +54,10 @@ required-features = ["baseview"]
 [[example]]
 name = "blocking_counter"
 required-features = ["baseview"]
+
+# [patch.crates-io]
+# repose-core = { path = "../repose/crates/repose-core" }
+# repose-ui = { path = "../repose/crates/repose-ui" }
+# repose-app = { path = "../repose/crates/repose-app" }
+# repose-render-wgpu = { path = "../repose/crates/repose-render-wgpu" }
+# repose-text = { path = "../repose/crates/repose-text" }

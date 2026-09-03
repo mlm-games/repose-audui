@@ -74,27 +74,8 @@ impl GpuSurface {
     }
 }
 
-/// Pick the largest supported MSAA sample count <= `requested` for a format.
 pub fn pick_msaa(adapter: &wgpu::Adapter, requested: u32, format: wgpu::TextureFormat) -> u32 {
-    let requested = requested.max(1);
-    if requested == 1 {
-        return 1;
-    }
-    let flags = adapter.get_texture_format_features(format).flags;
-    for samples in [8u32, 4, 2] {
-        if samples > requested {
-            continue;
-        }
-        let flag = match samples {
-            8 => wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X8,
-            4 => wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X4,
-            _ => wgpu::TextureFormatFeatureFlags::MULTISAMPLE_X2,
-        };
-        if flags.contains(flag) {
-            return samples;
-        }
-    }
-    1
+    repose_render_wgpu::pick_surface_msaa(adapter, format, requested)
 }
 
 /// Create a device + surface from rwh 0.6 handles and attach the renderer.
