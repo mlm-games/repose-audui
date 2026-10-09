@@ -1,0 +1,94 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      bump_type:
+        description: "Version bump type"
+        required: true
+        default: "patch"
+        type: choice
+        options:
+          - none
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    if: github.event_name == 'workflow_dispatch' && inputs.bump_type != 'none'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Read current version
+        id: read
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[0].version')"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Bump Cargo version
+        shell: bash
+        run: |
+          set -euo pipefail
+          IFS='.' read -r MAJ MIN PAT <<<"${{ steps.read.outputs.version }}"
+          case "${{ inputs.bump_type }}" in
+            major) MAJ=$((MAJ + 1)); MIN=0; PAT=0 ;;
+            minor) MIN=$((MIN + 1)); PAT=0 ;;
+            patch) PAT=$((PAT + 1)) ;;
+          esac
+          NEW_VERSION="$MAJ.$MIN.$PAT"
+          sed -i -E "/^\[package\]/,/^\[/ s/^version = \"${{ steps.read.outputs.version }}\"/version = \"$NEW_VERSION\"/" Cargo.toml
+          cargo update --workspace
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: bump to v$NEW_VERSION [skip ci]" || echo "No changes"
+          git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION"
+          git push && git push --tags
+
+  release:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Read tag version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate release notes
+        id: notes
+        uses: mlm-games/release-notes-generator@v1.2.1
+        with:
+          version: ${{ steps.version.outputs.version }}
+          auto-commit: "false"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: false
+          prerelease: false
+          body: ${{ steps.notes.outputs.release-notes }}

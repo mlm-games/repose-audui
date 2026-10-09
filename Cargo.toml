@@ -1,6 +1,6 @@
 [package]
 name = "repose-audui"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.93"
 license = "MPL-2.0 OR LGPL-2.1-or-later"
@@ -22,11 +22,10 @@ nih-plug = ["baseview", "dep:nih_plug", "dep:crossbeam"]
 keyboard-focus-workaround = []
 
 [dependencies]
-repose-app = "0.28"
-repose-core = "0.28"
-repose-ui = "0.28"
-repose-text = "0.28"
-repose-render-wgpu = { version = "0.28", default-features = false }
+repose-app = "0.31"
+repose-core = "0.31"
+repose-ui = "0.31"
+repose-render-wgpu = { version = "0.31", default-features = false }
 
 wgpu = "30"
 raw-window-handle = "0.6"
@@ -45,7 +44,7 @@ crossbeam = { version = "0.8", optional = true }
 
 [dev-dependencies]
 env_logger = "0.11"
-repose-material = "0.27"
+repose-material = "0.31"
 
 [[example]]
 name = "gain_gui"

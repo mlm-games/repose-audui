@@ -10,7 +10,12 @@ pub fn map_cursor(icon: CursorIcon) -> MouseCursor {
         CursorIcon::Text => MouseCursor::Text,
         CursorIcon::EwResize => MouseCursor::EwResize,
         CursorIcon::NsResize => MouseCursor::NsResize,
+        CursorIcon::NwseResize => MouseCursor::NwseResize,
+        CursorIcon::NeswResize => MouseCursor::NeswResize,
         CursorIcon::Grab => MouseCursor::Hand,
         CursorIcon::Grabbing => MouseCursor::HandGrabbing,
+        CursorIcon::Hidden => MouseCursor::Hidden,
+        // baseview has no custom-image cursor.
+        CursorIcon::Custom(_) => MouseCursor::Default,
     }
 }

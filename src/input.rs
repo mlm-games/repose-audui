@@ -56,6 +56,7 @@ pub mod baseview_map {
     use keyboard_types::{Key as KbKey, KeyState, KeyboardEvent, Modifiers as KbMods};
     use repose_core::Vec2;
     use repose_core::input::{Key, KeyEvent, KeyEventType, Modifiers, PointerButton};
+    use repose_core::locals::UnitExt;
 
     pub fn map_modifiers(m: KbMods) -> Modifiers {
         let shift = m.contains(KbMods::SHIFT);
@@ -169,6 +170,9 @@ pub mod baseview_map {
             is_repeat: ke.repeat,
             event_type,
             utf16_code_point: utf16,
+            physical: Some(repose_core::input::PhysicalKey::from_name(
+                &ke.code.to_string(),
+            )),
         };
 
         // Composed text on key-down, unless a shortcut modifier is held (avoids
@@ -239,7 +243,8 @@ pub mod baseview_map {
                     embed.set_modifiers(map_modifiers(modifiers));
                     let (dx, dy) = match delta {
                         ScrollDelta::Lines { x, y } => {
-                            let unit = repose_core::locals::dp_to_px(60.0);
+                            // One "line" of scroll is 60dp in repose.
+                            let unit = repose_core::locals::dp_to_px(60.0.dp()).0;
                             (-x * unit, -y * unit)
                         }
                         ScrollDelta::Pixels { x, y } => (-x, -y),

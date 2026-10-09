@@ -154,7 +154,7 @@ pub fn attach_from_handles(
     let surface =
         unsafe { std::mem::transmute::<wgpu::Surface<'_>, wgpu::Surface<'static>>(surface) };
 
-    embed.attach_device(device.clone(), queue.clone(), format, msaa);
+    embed.attach_device(device.clone(), queue.clone(), format, msaa)?;
     embed.set_size_px(config.width, config.height, embed.scale);
 
     Ok(GpuSurface {

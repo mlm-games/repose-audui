@@ -1,9 +1,9 @@
 //! Standalone gain-style UI (no audio). Pattern for nih-plug param rows.
 
+use repose_audui::baseview_host::{ReposeBaseviewConfig, open_blocking};
+use repose_audui::param_widgets::{panel, section_title};
 use repose_core::prelude::*;
 use repose_material::material3::{Slider, SliderConfig};
-use repose_audui::baseview_host::{open_blocking, ReposeBaseviewConfig};
-use repose_audui::param_widgets::{panel, section_title};
 use repose_ui::{Text, TextStyle};
 
 fn main() {
@@ -18,7 +18,7 @@ fn main() {
             let gain = remember_mutable(|| 0.75f32);
             panel((
                 section_title("Gain"),
-                Text(format!("{:.0}%", *gain.get() * 100.0)).size(14.0),
+                Text(format!("{:.0}%", *gain.get() * 100.0)).size(14.0.sp()),
                 Slider(
                     *gain.get(),
                     (0.0, 1.0),

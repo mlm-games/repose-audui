@@ -159,7 +159,7 @@ impl ReposeWindowHandler {
         let icon = self
             .embed
             .platform()
-            .and_then(|p| p.cursor)
+            .and_then(|p| p.cursor.clone())
             .or(Some(CursorIcon::Default));
         let next = icon.map(map_cursor);
         if next != self.last_cursor {

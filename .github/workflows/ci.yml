@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwayland-dev libxkbcommon-dev libfontconfig-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev pkg-config
+      - name: Install Rust components
+        run: rustup component add rustfmt clippy
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Check workspace
+        run: cargo check --workspace --all-targets --locked
+      - name: Run clippy
+        run: cargo clippy --workspace --all-targets --locked
+      - name: Run workspace tests
+        run: cargo test --workspace --locked
+
+  baseview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwayland-dev libxkbcommon-dev libfontconfig-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev pkg-config
+      - name: Check the baseview window host
+        run: cargo check --workspace --all-targets --locked --features baseview
+      - name: Run clippy
+        run: cargo clippy --workspace --all-targets --locked --features baseview
+
+  nih-plug:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwayland-dev libxkbcommon-dev libfontconfig-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev pkg-config
+      - name: Check the nih-plug editor
+        run: cargo check --workspace --all-targets --locked --features nih-plug
+      - name: Run clippy
+        run: cargo clippy --workspace --all-targets --locked --features nih-plug

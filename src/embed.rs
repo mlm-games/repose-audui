@@ -56,19 +56,16 @@ impl ReposeEmbed {
         queue: wgpu::Queue,
         format: wgpu::TextureFormat,
         msaa: u32,
-    ) {
+    ) -> anyhow::Result<()> {
         self.msaa_samples = msaa.max(1);
-        self.renderer = Some(WgpuSceneRenderer::from_device(
-            device,
-            queue,
-            format,
-            self.msaa_samples,
-        ));
+        let renderer = WgpuSceneRenderer::from_device(device, queue, format, self.msaa_samples)?;
+        self.renderer = Some(renderer);
         if (self.size_px.0 > 1 || self.size_px.1 > 1)
             && let Some(r) = &mut self.renderer
         {
             r.resize(self.size_px.0, self.size_px.1);
         }
+        Ok(())
     }
 
     pub fn has_renderer(&self) -> bool {
