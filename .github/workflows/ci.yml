@@ -8,6 +8,11 @@ on:
 permissions:
   contents: read
 
+# baseview's opengl backend pulls the x11 crate (gl + xlib + xlib-xcb) and
+# repose pulls fontconfig; the rest cover winit and clipawl.
+env:
+  LINUX_DEPS: libasound2-dev libgl-dev libegl-dev libx11-dev libx11-xcb-dev libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxcursor-dev libxext-dev libxinerama-dev libxi-dev libxrandr-dev libxss-dev libxkbcommon-dev libwayland-dev libfontconfig-dev pkg-config
+
 jobs:
   native:
     runs-on: ubuntu-latest
@@ -17,7 +22,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwayland-dev libxkbcommon-dev libfontconfig-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev pkg-config
+          sudo apt-get install -y ${{ env.LINUX_DEPS }}
       - name: Install Rust components
         run: rustup component add rustfmt clippy
       - name: Check formatting
@@ -37,7 +42,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwayland-dev libxkbcommon-dev libfontconfig-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev pkg-config
+          sudo apt-get install -y ${{ env.LINUX_DEPS }}
       - name: Check the baseview window host
         run: cargo check --workspace --all-targets --locked --features baseview
       - name: Run clippy
@@ -51,7 +56,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwayland-dev libxkbcommon-dev libfontconfig-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev pkg-config
+          sudo apt-get install -y ${{ env.LINUX_DEPS }}
       - name: Check the nih-plug editor
         run: cargo check --workspace --all-targets --locked --features nih-plug
       - name: Run clippy
